@@ -4,3 +4,6 @@ run:
 
 lab: 
     jupyter lab
+
+fast:
+    fastapi dev main.py
