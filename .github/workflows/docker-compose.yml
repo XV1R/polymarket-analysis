@@ -1,0 +1,52 @@
+name: Docker Compose Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build services
+        run: docker-compose build
+
+      - name: Start services
+        run: docker-compose up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          timeout=120
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            if curl -f http://localhost:8000/ > /dev/null 2>&1 && \
+               curl -f http://localhost:8501/_stcore/health > /dev/null 2>&1; then
+              echo "Services are healthy"
+              exit 0
+            fi
+            echo "Waiting for services... ($elapsed/$timeout seconds)"
+            sleep 5
+            elapsed=$((elapsed + 5))
+          done
+          echo "Services failed to become healthy"
+          docker-compose logs
+          exit 1
+
+      - name: Check service logs
+        if: failure()
+        run: docker-compose logs
+
+      - name: Stop services
+        if: always()
+        run: docker-compose down
+
