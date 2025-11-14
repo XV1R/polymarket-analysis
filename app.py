@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from market import MarketAPI
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Union
 import json
 import os
 import logging
@@ -27,33 +27,33 @@ async def root():
     return {"message": "Hello World"}
 
 @app.get('/markets/{condition_id}')
-async def get_market(condition_id: str) -> dict:
+async def get_market(condition_id: str) -> Union[list, dict]:
     logger.info(f"Fetching market trades for condition_id: {condition_id}")
     resp = market.get_trades_for_market(condition_id, limit=1)
     if resp is None:
         logger.warning(f"Failed to fetch trades for condition_id: {condition_id}")
-    else:
-        logger.debug(f"Successfully fetched trades for condition_id: {condition_id}")
+        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
+    logger.debug(f"Successfully fetched trades for condition_id: {condition_id}")
     return resp
 
 @app.get("/markets/{condition_id}/user-distribution")
-async def get_user_distribution(condition_id: str) -> dict:
+async def get_user_distribution(condition_id: str) -> Union[list, dict]:
     logger.info(f"Fetching user distribution for condition_id: {condition_id}")
-    trades: Optional[dict] = market.get_trades_for_market(condition_id)
+    trades = market.get_trades_for_market(condition_id)
     if trades is None:
         logger.warning(f"No trades found for condition_id: {condition_id}")
-        return {"error": "No trades found"}
+        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
     logger.debug(f"Successfully fetched user distribution for condition_id: {condition_id}")
     return trades
 
 
 @app.get("/markets/{condition_id}/stats")
-async def get_market_stats(condition_id: str) -> dict: 
+async def get_market_stats(condition_id: str) -> Union[list, dict]: 
     logger.info(f"Fetching market stats for condition_id: {condition_id}")
-    trades: Optional[dict] = market.get_trades_for_market(condition_id)
+    trades = market.get_trades_for_market(condition_id)
     if trades is None:
         logger.warning(f"No trades found for stats, condition_id: {condition_id}")
-        return {"error": "No trades found"}
+        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
     logger.debug(f"Successfully fetched stats for condition_id: {condition_id}")
     return trades
 

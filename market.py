@@ -1,6 +1,6 @@
 import requests
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 # Configure logger for market API
 logger = logging.getLogger("polymarket.market")
@@ -78,7 +78,7 @@ class MarketAPI():
                               limit: int = 500, 
                               offset: int = 0, 
                               takerOnly:bool = False, 
-                              side: Optional[str] = None) -> Optional[dict]:
+                              side: Optional[str] = None) -> Optional[Union[list, dict]]:
         # API expects string values for parameters
         query = {
             "market": market,
