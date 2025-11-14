@@ -1,9 +1,21 @@
+set dotenv-load
+
+# Common paths
+VENV_BIN := "./venv/bin"
+
+# Aliases
+alias f := fast
+alias l := lab
+alias r := run
+
+@_default:
+    just --list
 
 run:
-    python3 main.py
+    {{VENV_BIN}}/python3 main.py
 
-lab: 
-    jupyter lab
+lab:
+    {{VENV_BIN}}/jupyter lab
 
 fast:
-    fastapi dev main.py
+    {{VENV_BIN}}/fastapi dev main.py
