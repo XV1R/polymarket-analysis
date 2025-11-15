@@ -207,4 +207,18 @@ else:
 
 # Footer
 st.markdown("---")
+with st.spinner("Fetching all market data..."):
+    data = fetch_endpoint(st.session_state.api_url, "/")
+    if "error" in data:
+        st.error(f"❌ {data['error']}")
+    else:
+        try:
+            df = pd.DataFrame(data)
+            st.subheader("All Markets Data")
+            st.dataframe(df, use_container_width=True)
+            st.caption(f"Total records: {len(df)}")
+        except Exception:
+            st.info("Could not render market data as a table.")
+
+
 st.caption("Polymarket Dashboard | FastAPI Backend")
