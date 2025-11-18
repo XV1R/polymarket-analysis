@@ -75,7 +75,7 @@ class MarketAPI():
             return None
 
     def get_trades_for_market(self, market: str, 
-                              limit: int = 500, 
+                              limit: int = 100, 
                               offset: int = 0, 
                               takerOnly:bool = False, 
                               side: Optional[str] = None) -> Optional[Union[list, dict]]:

@@ -11,6 +11,7 @@ alias s := streamlit
 alias dc := docker-up
 alias dcd := docker-down
 alias dcl := docker-logs
+alias dr := docker-rebuild-restart
 
 @_default:
     just --list
@@ -87,6 +88,12 @@ docker-ps:
 docker-rebuild:
     # Rebuild and restart all services with verbose output
     docker-compose up -d --build --progress=plain --force-recreate
+
+docker-rebuild-restart:
+    # Stop, rebuild, and restart all services
+    docker-compose down
+    docker-compose build
+    docker-compose up -d
 
 docker-clean:
     # Stop containers and remove volumes

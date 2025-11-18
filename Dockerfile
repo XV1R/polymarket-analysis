@@ -1,5 +1,5 @@
 # Multi-stage build for Python application
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
@@ -24,7 +24,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
 # Copy application code
-COPY app.py market.py ./
+COPY app.py market.py trades.py ./
 
 # Expose port for FastAPI
 EXPOSE 8000
