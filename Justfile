@@ -35,85 +35,85 @@ install PACKAGE:
 # Docker commands
 docker-build:
     # Build all Docker images with verbose output
-    docker-compose build --progress=plain --no-cache
+    docker compose build --progress=plain --no-cache
 
 docker-build-cached:
     # Build all Docker images with cache (faster)
-    docker-compose build --progress=plain
+    docker compose build --progress=plain
 
 docker-build-api:
     # Build API image only with verbose output
-    docker-compose build --progress=plain --no-cache api
+    docker compose build --progress=plain --no-cache api
 
 docker-build-dashboard:
     # Build Dashboard image only with verbose output
-    docker-compose build --progress=plain --no-cache dashboard
+    docker compose build --progress=plain --no-cache dashboard
 
 docker-up:
     # Start all services in detached mode with verbose output
-    docker-compose up -d --remove-orphans
+    docker compose up -d --remove-orphans
 
 docker-up-verbose:
     # Start all services in foreground with verbose output
-    docker-compose up --build
+    docker compose up --build
 
 docker-down:
     # Stop and remove all containers
-    docker-compose down
+    docker compose down
 
 docker-restart:
     # Restart all services
-    docker-compose restart
+    docker compose restart
 
 docker-logs:
     # View logs from all services (last 100 lines, then follow)
-    docker-compose logs --tail=100 -f
+    docker compose logs --tail=100 -f
 
 docker-logs-api:
     # View logs from API service only (last 100 lines, then follow)
-    docker-compose logs --tail=100 -f api
+    docker compose logs --tail=100 -f api
 
 docker-logs-dashboard:
     # View logs from Dashboard service only (last 100 lines, then follow)
-    docker-compose logs --tail=100 -f dashboard
+    docker compose logs --tail=100 -f dashboard
 
 docker-logs-all:
     # View all logs from all services (no limit)
-    docker-compose logs --tail=all
+    docker compose logs --tail=all
 
 docker-ps:
     # Show running containers with details
-    docker-compose ps -a
+    docker compose ps -a
 
 docker-rebuild:
     # Rebuild and restart all services with verbose output
-    docker-compose up -d --build --progress=plain --force-recreate
+    docker compose up -d --build --progress=plain --force-recreate
 
 docker-rebuild-restart:
     # Stop, rebuild, and restart all services
-    docker-compose down
-    docker-compose build
-    docker-compose up -d
+    docker compose down
+    docker compose build
+    docker compose up -d
 
 docker-clean:
     # Stop containers and remove volumes
-    docker-compose down -v
+    docker compose down -v
 
 docker-clean-all:
     # Remove containers, volumes, and images
-    docker-compose down -v --rmi all
+    docker compose down -v --rmi all
 
 docker-shell-api:
     # Open shell in API container
-    docker-compose exec api /bin/bash
+    docker compose exec api /bin/bash
 
 docker-shell-dashboard:
     # Open shell in Dashboard container
-    docker-compose exec dashboard /bin/bash
+    docker compose exec dashboard /bin/bash
 
 docker-status:
     # Show status of all services
-    @docker-compose ps -a
+    @docker compose ps -a
     @echo ""
     @echo "API Health:"
     @curl -s http://localhost:8000/ | head -1 || echo "API not responding"
@@ -124,7 +124,7 @@ docker-status:
 docker-debug:
     # Show detailed debug information
     @echo "=== Docker Compose Configuration ==="
-    @docker-compose config
+    @docker compose config
     @echo ""
     @echo "=== Docker Images ==="
     @docker images | grep -E "(polymarket|REPOSITORY)" || docker images
@@ -141,15 +141,15 @@ docker-debug:
 
 docker-inspect-api:
     # Inspect API container details
-    docker-compose ps api
+    docker compose ps api
     docker inspect polymarket-api 2>/dev/null || echo "Container not found"
 
 docker-inspect-dashboard:
     # Inspect Dashboard container details
-    docker-compose ps dashboard
+    docker compose ps dashboard
     docker inspect polymarket-dashboard 2>/dev/null || echo "Container not found"
 
 docker-build-logs:
     # Show build logs for failed builds
     @echo "=== Recent Build Logs ==="
-    @docker-compose logs --tail=200 | grep -i -E "(error|fail|warn|build)" || docker-compose logs --tail=200
+    @docker compose logs --tail=200 | grep -i -E "(error|fail|warn|build)" || docker compose logs --tail=200

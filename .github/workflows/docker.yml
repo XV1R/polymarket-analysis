@@ -80,10 +80,10 @@ jobs:
 
       - name: Test Docker Compose
         run: |
-          docker-compose build
-          docker-compose up -d
+          docker compose build
+          docker compose up -d
           sleep 15
-          docker-compose ps
+          docker compose ps
           # Wait for services to be ready
           timeout=60
           elapsed=0
@@ -100,5 +100,5 @@ jobs:
           curl -f http://localhost:8000/ || exit 1
           # Test Dashboard health
           curl -f http://localhost:8501/_stcore/health || exit 1
-          docker-compose down
+          docker compose down
 
