@@ -1,10 +1,10 @@
 from typing import Optional, Union
 from market import MarketAPI
-from dotenv import load_dotenv
 import polars as pl
 import duckdb
 import logging
 import os
+
 
 class InsertError(Exception):
     """
@@ -19,24 +19,24 @@ class TradeStorage:
     Storage for trades data in a parquet file to avoid making too many requests to the market API
     """
     #TODO fix this so it can be used in a multi-process environment
-    def __init__(self, path:str = os.getenv("PARQUET_FILE")):
-        self.conn = duckdb.connect(path)
+    def __init__(self):
+        self.path = "data.parquet"
+        self.conn = duckdb.connect(self.path)
         self.logger = logging.getLogger("polymarket.trades")
         self.create_table()
 
     def create_table(self) -> None:
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS trades (
-                id BIGINT PRIMARY KEY,
+                hash VARCHAR PRIMARY KEY,
                 condition_id VARCHAR,
                 user VARCHAR,
                 size DECIMAL,
                 price DECIMAL,
                 side VARCHAR,
-                timestamp TIMESTAMP,
-                hash VARCHAR,
-                )
-            """)
+                timestamp TIMESTAMP
+            )
+        """)
 
     def get_trades_df(self, condition_id: str) -> pl.DataFrame:
         """Get trades for a condition_id as Polars DataFrame"""
@@ -59,19 +59,20 @@ class TradeStorage:
             return
         try:
             df = pl.DataFrame(trades).select(
+                pl.col("transactionHash").alias("hash"),
                 pl.col("conditionId").alias("condition_id"),
                 pl.col("name").alias("user"),
-                pl.col("size").alias("size"),
-                pl.col("price").alias("price"),
-                pl.col("side").alias("side"),
-                pl.col("timestamp").alias("timestamp"),
-                pl.col("transactionHash").alias("hash"),
+                pl.col("size"),
+                pl.col("price"),
+                pl.col("side"),
+                pl.col("timestamp").cast(pl.Datetime("ns")).alias("timestamp"),
             )
             self.conn.register("trades_temp", df)
-            self.conn.execute("INSERT INTO trades SELECT * FROM trades_temp")
+            # Use INSERT OR IGNORE to skip duplicates (based on PRIMARY KEY hash)
+            self.conn.execute("INSERT OR IGNORE INTO trades SELECT * FROM trades_temp")
             # Unregister the temporary view
             self.conn.unregister("trades_temp")
-            self.logger.info(f"Successfully inserted {len(df)} trades")
+            self.logger.info(f"Successfully inserted {len(df)} trades (duplicates skipped)")
         except Exception as e:
             self.logger.error(f"Error inserting trades: {e}")
             # Clean up view if it exists

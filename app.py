@@ -16,26 +16,22 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("polymarket.api")
-
 load_dotenv()
-
-# Initialize instances
-market = MarketAPI()
-tstorage = TradeStorage()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("FastAPI application starting up...")
-    path = os.getenv("PARQUET_FILE")
-    if not os.file.exists(path):
-        write_data(market, out=path, cap=10_000, closed=False)
+    if not os.path.exists("data.parquet"):
+        write_data(market, out="data.parquet", cap=10_000, closed=True)
     logger.info("FastAPI application initialized")
     yield
     # Shutdown (if needed)
     logger.info("FastAPI application shutting down...")
 
 app = FastAPI(lifespan=lifespan)
+market = MarketAPI()
+tstorage = TradeStorage()
 
 @app.get("/")
 async def root():
