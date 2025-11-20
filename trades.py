@@ -1,83 +1,42 @@
-from typing import Optional, Union
-from market import MarketAPI
+from typing import Union, List, TypeVar
 import polars as pl
-import duckdb
-import logging
 import os
-
+import logging
+from utils import clean_market_frame, clean_trade_frame
 
 class InsertError(Exception):
-    """
-    Exception raised when an error occurs while inserting trades
-    """
-    def __init__(self, message: str):
-        self.message = message
-        super().__init__(self.message)
+    pass
 
-class TradeStorage:
-    """
-    Storage for trades data in a parquet file to avoid making too many requests to the market API
-    """
-    #TODO fix this so it can be used in a multi-process environment
+
+class MarketStorage:
     def __init__(self):
         self.path = "data.parquet"
-        self.conn = duckdb.connect(self.path)
         self.logger = logging.getLogger("polymarket.trades")
-        self.create_table()
+        self.market_df = clean_market_frame(pl.LazyFrame("data.parquet"))
+        #self.trades_df = clean_trade_frame(pl.LazyFrame("trades.parquet"))
+        self.logger.info(self.market_df.columns)
+        self.logger.info(self.trades_df.columns)
+    def insert_markets(self, markets: Union[dict, List[dict]]) -> bool:
+        if isinstance(markets, dict):
+            markets = [markets]
+        new_markets_df = clean_market_frame(pl.LazyFrame(markets))
+        self.market_df = pl.concat(self.market_df, new_markets_df, how="vertical")
+        return True
 
-    def create_table(self) -> None:
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS trades (
-                hash VARCHAR PRIMARY KEY,
-                condition_id VARCHAR,
-                user VARCHAR,
-                size DECIMAL,
-                price DECIMAL,
-                side VARCHAR,
-                timestamp TIMESTAMP
-            )
-        """)
 
-    def get_trades_df(self, condition_id: str) -> pl.DataFrame:
-        """Get trades for a condition_id as Polars DataFrame"""
-        try:
-            result = self.conn.execute(
-                "SELECT * FROM trades WHERE condition_id = ?",
-                [condition_id]
-            ).pl()
-            return result
-        except Exception as e:
-            self.logger.error(f"Error fetching trades: {e}")
-            return pl.DataFrame()  # Return empty DataFrame on error
-
-    def insert_trades(self, trades: Union[list, dict]) -> None:
-        """Insert trades into database"""
+    def insert_trades(self, trades: Union[dict, List[dict]]) -> bool:
         if isinstance(trades, dict):
             trades = [trades]
-        if not trades:
-            self.logger.warning("No trades to insert")
-            return
-        try:
-            df = pl.DataFrame(trades).select(
-                pl.col("transactionHash").alias("hash"),
-                pl.col("conditionId").alias("condition_id"),
-                pl.col("name").alias("user"),
-                pl.col("size"),
-                pl.col("price"),
-                pl.col("side"),
-                pl.col("timestamp").cast(pl.Datetime("ns")).alias("timestamp"),
-            )
-            self.conn.register("trades_temp", df)
-            # Use INSERT OR IGNORE to skip duplicates (based on PRIMARY KEY hash)
-            self.conn.execute("INSERT OR IGNORE INTO trades SELECT * FROM trades_temp")
-            # Unregister the temporary view
-            self.conn.unregister("trades_temp")
-            self.logger.info(f"Successfully inserted {len(df)} trades (duplicates skipped)")
-        except Exception as e:
-            self.logger.error(f"Error inserting trades: {e}")
-            # Clean up view if it exists
-            try:
-                self.conn.unregister("trades_temp")
-            except:
-                pass
-            raise InsertError(f"Error inserting trades: {e}")
+        new_trades_df = clean_trade_frame(pl.DataFrame(trades).lazy())
+        self.trades_df = pl.concat(self.trades_df, new_trades_df, how='vertical')
+
+    def get_trades_lf(self, condition_ids: Union[str, list[str]]) -> pl.LazyFrame:
+        """Get trades for a condition_id or list of condition_ids as Polars DataFrame"""
+        if isinstance(condition_ids, str):
+            condition_ids = [condition_ids]
+        result: pl.LazyFrame = self.market_df.filter(pl.col("condition_id").is_in(condition_ids))
+        if result.collect().is_empty():
+            self.logger.warning(f"No trades found for markets {condition_ids}")
+        self.logger.info(f"Returning result {result}")
+        return result.lazy()
+

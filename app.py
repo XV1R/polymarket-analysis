@@ -1,8 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from market import MarketAPI
-from trades import TradeStorage
 from dotenv import load_dotenv
-from typing import Optional, Union
+from typing import Optional, List
 from contextlib import asynccontextmanager
 import logging
 import polars as pl
@@ -21,7 +20,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("FastAPI application starting up...")
     if not os.path.exists("data.parquet"):
-        write_data(market, out="data.parquet", cap=10_000, closed=True)
+        write_market_data(market, out="data.parquet", cap=100_000, closed=True)
     logger.info("FastAPI application initialized")
     yield
     # Shutdown (if needed)
@@ -29,59 +28,79 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 market = MarketAPI()
-tstorage = TradeStorage()
 
 @app.get("/")
 async def root():
     logger.debug("Root endpoint accessed")
     return {"message": "Hello World"}
 
+@app.get("/markets/search")
+async def search_markets(
+    q: Optional[str] = None,
+    limit: int = 20,
+    closed: Optional[bool] = None
+) -> List[dict]:
+    """Search markets for autocomplete suggestions"""
+    logger.info(f"Searching markets with query: {q}, limit: {limit}")
+    try:
+        response = market.get_markets(limit=limit, closed=closed)
+        if response is None:
+            return []
+        
+        markets = response.json()
+        if not isinstance(markets, list):
+            markets = markets if isinstance(markets, list) else []
+        
+        # Filter by query if provided
+        if q:
+            q_lower = q.lower()
+            markets = [
+                m for m in markets
+                if q_lower in str(m.get("question", "")).lower()
+                or q_lower in str(m.get("slug", "")).lower()
+                or q_lower in str(m.get("conditionId", "")).lower()
+            ]
+        
+        # Return simplified format for autocomplete
+        result = []
+        for m in markets[:limit]:
+            result.append({
+                "conditionId": m.get("conditionId"),
+                "question": m.get("question", ""),
+                "slug": m.get("slug", ""),
+                "volume": m.get("volume", 0),
+                "liquidity": m.get("liquidity", 0),
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error searching markets: {e}")
+        return []
+
 @app.get('/markets/{condition_id}')
-async def get_market_trades(condition_id: str) -> Union[list, dict]:
+async def get_market_trades(condition_id: str) -> List[dict]:
     logger.info(f"Fetching market trades for condition_id: {condition_id}")
-    trades_df: pl.DataFrame = tstorage.get_trades_df(condition_id)
-    if not trades_df.is_empty():
-        logger.info(f"Returning {trades_df.height} cached trades")
-        return trades_df.to_dicts()
-    
-    logger.info(f"No trades found in storage for condition_id: {condition_id}, fetching from market API")
-    trades: Optional[Union[list, dict]] = market.get_trades_for_market(condition_id, limit=100)
-    if trades is None:
-        logger.warning(f"Failed to fetch trades for condition_id: {condition_id}")
-        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
-    
-    logger.debug(f"Successfully fetched trades for condition_id: {condition_id}")
-    # Save to storage
-    tstorage.insert_trades(trades)
-    
-    # Return as list of dicts
-    if isinstance(trades, dict):
-        return [trades]
-    return trades
-
-@app.get("/markets/{condition_id}/user-distribution")
-async def get_user_distribution(condition_id: str) -> Union[list, dict]:
-    logger.info(f"Fetching user distribution for condition_id: {condition_id}")
-    trades = market.get_trades_for_market(condition_id)
-    if trades is None:
-        logger.warning(f"No trades found for condition_id: {condition_id}")
-        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
-    logger.debug(f"Successfully fetched user distribution for condition_id: {condition_id}")
-    return trades
-
-
-@app.get("/markets/{condition_id}/stats")
-async def get_market_stats(condition_id: str) ->Union[list, dict]: 
-    logger.info(f"Fetching market stats for condition_id: {condition_id}")
-    trades = market.get_trades_for_market(condition_id)
-    if trades is None:
-        logger.warning(f"No trades found for stats, condition_id: {condition_id}")
-        raise HTTPException(status_code=404, detail=f"No trades found for condition_id: {condition_id}")
-    logger.debug(f"Successfully fetched stats for condition_id: {condition_id}")
-    return trades
+    try:
+        trades: pl.DataFrame = market.fetch_market_trades(condition_id).collect()
+        if trades.is_empty():
+            logger.warning(f"No trades found for condition_id: {condition_id}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No trades found for condition_id: {condition_id}. The market may not exist or have no trades yet."
+            )
+        logger.info(f"Successfully fetched {trades.height} trades for {condition_id}")
+        return trades.to_dicts()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error fetching trades for {condition_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error fetching trades: {str(e)}"
+        )
 
     
-def write_data(market: MarketAPI, out: str, cap: int = 10_000, closed: bool = False) -> None:
+def write_market_data(market: MarketAPI, out: str, cap: int = 10_000, closed: bool = False) -> None:
     logger.info(f"Starting data write to {out}, cap: {cap}, closed: {closed}")
     count = 0
     all_records = []

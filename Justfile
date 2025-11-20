@@ -16,7 +16,10 @@ alias dr := docker-rebuild-restart
 @_default:
     just --list
 
-run:
+[parallel]
+run: fast streamlit
+
+app:
     {{VENV_BIN}}/python3 app.py
 
 lab:

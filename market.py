@@ -1,8 +1,9 @@
+from typing import Optional, Union
+from trades import MarketStorage
+import polars as pl
 import requests
 import logging
-from typing import Optional, Union
 
-# Configure logger for market API
 logger = logging.getLogger("polymarket.market")
 
 class MarketAPI():
@@ -12,15 +13,45 @@ class MarketAPI():
     def __init__(self):
         self.gamma_api_url ="https://gamma-api.polymarket.com"
         self.data_api_url ="https://data-api.polymarket.com"
+        self.mstorage: MarketStorage = MarketStorage()
         self.logger = logger
         logger.info("MarketAPI initialized")
+    
+    #Endpoint handler
+    def fetch_market_trades(self, condition_id: str) -> pl.LazyFrame:
+        trades: pl.LazyFrame = self.mstorage.get_trades_lf(condition_id)
+        if not trades.collect().is_empty():
+            self.logger.info(f"Returning {trades.height} cached trades for {condition_id}")
+            return trades
+        # Fetch from API
+
+        self.logger.info(f"No cached trades, fetching from API for {condition_id}")
+        trades_data = self.get_trades_for_market(condition_id, limit=1000)
+
+        if trades_data is None:
+            self.logger.warning(f"API returned None for {condition_id} - market may not exist or have no trades")
+            return pl.LazyFrame() 
+        
+        if isinstance(trades_data, list) and len(trades_data) == 0:
+            self.logger.warning(f"API returned empty list for {condition_id}")
+            return pl.LazyFrame()
+
+        self.mstorage.insert_markets(trades_data)
+
+        
+        if isinstance(trades_data, list):
+            return pl.LazyFrame(trades_data)
+        elif isinstance(trades_data, dict):
+            return pl.LazyFrame([trades_data])
+        else:
+            return pl.LazyFrame()
 
     def get_markets(self, limit: int = 20, 
                    offset: Optional[int] = None, 
                    order: Optional[str] = None,
                    ascending: Optional[bool] = None,
                    closed: Optional[bool] = None,
-                   **kwargs) -> requests.Response:
+                   **kwargs) -> Optional[requests.Response]:
         """
         Retrieves a list of markets from the Polymarket gamma API.
 
@@ -96,13 +127,28 @@ class MarketAPI():
                 params=query,
                 timeout=30  # 30 second timeout
             )
-            response.raise_for_status()  # Raise exception for bad status codes
+            
+            # Handle 404 specifically - market doesn't exist or has no trades
+            if response.status_code == 404:
+                self.logger.warning(f"Market {market} not found or has no trades (404)")
+                return None
+            
+            response.raise_for_status()  # Raise exception for other bad status codes
             data = response.json()
+            
+            # Check if data is empty
+            if isinstance(data, list) and len(data) == 0:
+                self.logger.info(f"Market {market} exists but has no trades")
+                return []
+            
             trade_count = len(data) if isinstance(data, list) else 1
             self.logger.info(f"Successfully fetched {trade_count} trades for market {market}")
             return data
         except requests.exceptions.Timeout:
             self.logger.error(f"Timeout getting trades for market {market}")
+            return None
+        except requests.exceptions.HTTPError as e:
+            self.logger.error(f"HTTP error getting trades for market {market}: {e.response.status_code if hasattr(e, 'response') else 'unknown'}")
             return None
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error getting trades for market {market}: {e}")

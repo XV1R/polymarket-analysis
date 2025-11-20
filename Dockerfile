@@ -24,7 +24,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
 # Copy application code
-COPY app.py market.py trades.py ./
+COPY app.py market.py trades.py utils.py ./
 
 # Expose port for FastAPI
 EXPOSE 8000
