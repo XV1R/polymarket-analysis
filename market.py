@@ -18,33 +18,32 @@ class MarketAPI():
         logger.info("MarketAPI initialized")
     
     #Endpoint handler
-    def fetch_market_trades(self, condition_id: str) -> pl.LazyFrame:
-        trades: pl.LazyFrame = self.mstorage.get_trades_lf(condition_id)
-        if not trades.collect().is_empty():
+    def fetch_market_trades(self, condition_id: str, refresh: bool) -> pl.DataFrame:
+        trades: pl.DataFrame = self.mstorage.get_trades_lf(condition_id).collect()
+        if not trades.is_empty() and not refresh:
             self.logger.info(f"Returning {trades.height} cached trades for {condition_id}")
             return trades
-        # Fetch from API
 
+        # Fetch from API
         self.logger.info(f"No cached trades, fetching from API for {condition_id}")
         trades_data = self.get_trades_for_market(condition_id, limit=1000)
 
         if trades_data is None:
             self.logger.warning(f"API returned None for {condition_id} - market may not exist or have no trades")
-            return pl.LazyFrame() 
+            return pl.DataFrame() 
         
         if isinstance(trades_data, list) and len(trades_data) == 0:
             self.logger.warning(f"API returned empty list for {condition_id}")
-            return pl.LazyFrame()
+            return pl.DataFrame()
 
         self.mstorage.insert_markets(trades_data)
-
         
         if isinstance(trades_data, list):
-            return pl.LazyFrame(trades_data)
+            return pl.DataFrame(trades_data)
         elif isinstance(trades_data, dict):
-            return pl.LazyFrame([trades_data])
+            return pl.DataFrame([trades_data])
         else:
-            return pl.LazyFrame()
+            return pl.DataFrame()
 
     def get_markets(self, limit: int = 20, 
                    offset: Optional[int] = None, 

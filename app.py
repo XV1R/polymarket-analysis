@@ -81,7 +81,7 @@ async def search_markets(
 async def get_market_trades(condition_id: str) -> List[dict]:
     logger.info(f"Fetching market trades for condition_id: {condition_id}")
     try:
-        trades: pl.DataFrame = market.fetch_market_trades(condition_id).collect()
+        trades: pl.DataFrame = market.fetch_market_trades(condition_id, True)
         if trades.is_empty():
             logger.warning(f"No trades found for condition_id: {condition_id}")
             raise HTTPException(
