@@ -4,12 +4,14 @@ from typing import TypeVar
 FrameType = TypeVar("FrameType", pl.DataFrame, pl.LazyFrame)
 
 def clean_market_frame(frame: FrameType) -> FrameType:
-    return frame.with_columns([
+    df = frame.select([
         pl.col('startDate').cast(pl.Datetime).alias('start_date'),
         pl.col('endDate').cast(pl.Datetime).alias('end_date'),
-        pl.col('volume').cast(pl.Float64),
+        pl.col('volume').cast(pl.Float64).alias('volume'),
         pl.col('conditionId').alias('condition_id')
-    ]).drop(
+    ])
+    return df.select([
+        pl.exclude(
         "sponsorImage", 
         "sentDiscord", 
         "umaResolutionStatuses", 
@@ -20,8 +22,9 @@ def clean_market_frame(frame: FrameType) -> FrameType:
         "volume1wk",
         "volume1mo",
         "icon",
-        "startDateIso"
-    ).sort('start_date', 
+        "startDateIso",
+        )
+    ]).sort('start_date', 
            descending=True, 
            multithreaded=True,
            nulls_last=True)    
